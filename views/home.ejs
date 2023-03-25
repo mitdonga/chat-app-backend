@@ -1,0 +1,24 @@
+<%- include('./partials/header'); -%>
+
+	<h1>Home</h1>
+	<p>
+		<%= content %>
+	</p>
+	<% if (posts.length> 0){ %>
+		<h2>Blogs</h2>
+		<% } %>
+
+			<div>
+				<% posts.forEach(post=> { %>
+					<h3>
+						<a href="/posts/<%= post.title.replace(' ', '-').replace(/(^\&)|,/g, '') %>">
+							<%= post.title %>
+						</a>
+					</h3>
+					<p>
+						<%= (post.post.length> 100) ? post.post.slice(0, 100) + '...' : post.post %>
+					</p>
+					<% }) %>
+			</div>
+
+			<%- include('./partials/footer'); -%>
