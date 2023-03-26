@@ -11,12 +11,12 @@
 			<div>
 				<% posts.forEach(post=> { %>
 					<h3>
-						<a href="/posts/<%= post.title.replace(' ', '-').replace(/(^\&)|,/g, '') %>">
+						<a href="/posts/<%= post.slug%>">
 							<%= post.title %>
 						</a>
 					</h3>
 					<p>
-						<%= (post.post.length> 100) ? post.post.slice(0, 100) + '...' : post.post %>
+						<%= (post.body.length> 100) ? post.body.slice(0, 100) + '...' : post.body %>
 					</p>
 					<% }) %>
 			</div>

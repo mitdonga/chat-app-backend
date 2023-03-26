@@ -1,0 +1,22 @@
+<%- include('./partials/header'); -%>
+
+	<h1>Edit</h1>
+	<div class="mb-5">
+		<form method="POST" action="/posts/<%= post.slug %>">
+			<div class="form-floating form-group mb-3">
+				<label for="title" class="form-label">Title</label>
+				<input type="text" name="title" class="form-control" value="<%= post.title %>" required autofocus>
+			</div>
+			<div class="form-floating form-group mb-3">
+				<label for="title" class="form-label">Slug</label>
+				<input type="text" name="slug" class="form-control" value="<%= post.slug %>" required>
+			</div>
+			<div class="form-floating form-group mt-4">
+				<label for="post" class="form-label">Conent</label>
+				<textarea type="text" name="body" class="form-control" rows="10" required><%= post.body %></textarea>
+			</div>
+			<button type="submit" class="btn btn-primary mt-5">Update</button>
+		</form>
+	</div>
+
+	<%- include('./partials/footer'); -%>

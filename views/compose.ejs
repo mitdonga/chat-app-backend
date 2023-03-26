@@ -4,11 +4,15 @@
 	<form method="post" action="/compose">
 		<div class="form-floating form-group mb-3">
 			<label for="title" class="form-label">Title</label>
-			<input type="text" name="title" class="form-control" autofocus>
+			<input type="text" name="title" class="form-control" required autofocus>
+		</div>
+		<div class="form-floating form-group mb-3">
+			<label for="title" class="form-label">Slug</label>
+			<input type="text" name="slug" class="form-control" required>
 		</div>
 		<div class="form-floating form-group mt-4">
-			<label for="post" class="form-label">Post</label>
-			<textarea type="text" name="post" class="form-control" rows="10"></textarea>
+			<label for="post" class="form-label">Conent</label>
+			<textarea type="text" name="body" class="form-control" rows="10" required></textarea>
 		</div>
 		<button type="submit" class="btn btn-primary mt-5">Publish</button>
 	</form>
