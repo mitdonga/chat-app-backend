@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 mongoose.connect('mongodb+srv://mitpatel5344:5344@indiancluster.qcyvhu0.mongodb.net/blogDB?retryWrites=true&w=majority', { useNewUrlParser: true });
-// mongoose.connect('mongodb://localhost:27017/blogDB', { useNewUrlParser: true });
 
 const commentSchema = mongoose.Schema({
 	name: {
