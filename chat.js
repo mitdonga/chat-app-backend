@@ -18,7 +18,7 @@ app.get("/", (req, res) => {
 
 app.get('/:roomId', async (req, res) => {
 	const roomId = req.params.roomId;
-	const chatRoom = await ChatRoom.findOne({ roomId: roomId });
+	const chatRoom = roomId > 0 ? await ChatRoom.findOne({ roomId: Number(roomId) }) : null;
 	if (chatRoom) {
 		try {
 			res.render(__dirname + "/views/chatRoom", {chat: chatRoom})
@@ -36,15 +36,14 @@ app.post('/save', async (req, res) => {
 	const roomId = Number(req.body.roomId);
 	const message = req.body.message;
 	const username = req.body.username;
-	
 
-	const chatRoom = await ChatRoom.findOne({ roomId: roomId });
+	const chatRoom = roomId > 0 ? await ChatRoom.findOne({ roomId: roomId }) : null;
 	if (chatRoom) {
 		try {
 			const chatMessage = { content: message, messenger: { username: username }}
 			chatRoom.messages.push(chatMessage);
 			await chatRoom.save()
-			res.render(__dirname + "/views/chatRoom", {chat: chatRoom})
+			res.redirect(`/${roomId}`)
 		} catch(err) {
 			console.log(err);
 			res.render(__dirname + "/views/chatRoom", {chat: chatRoom, error: err})
