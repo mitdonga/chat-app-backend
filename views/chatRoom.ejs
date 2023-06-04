@@ -1,3 +1,11 @@
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  var socket = io();
+	socket.on('new message', function (msg){
+		console.log(msg);
+		location.reload();
+	});
+</script>
 
 <%- include('./partials/header'); -%>
 
@@ -13,7 +21,7 @@
   <input type="text" id="username_input" class="form-control" placeholder="Enter your username" aria-describedby="addon-wrapping">
 </div>
 
-<section style="background-color: #eee;">
+<section style="background-color: #eee; overflow: scroll;">
   <div class="container py-5">
 
     <div class="row d-flex justify-content-center">
@@ -58,7 +66,7 @@
 </section>
 
 
-<%- include('./partials/footer'); -%>
+<!-- <%- include('./partials/footer'); -%> -->
 
 <script>
 	const temp = document.getElementById("username_input")
@@ -66,5 +74,6 @@
 	function handleUsername(e){
 		const userInput = document.getElementById("user_name");
 		userInput.value = e.target.value;
+		socket.emit('username input', e.target.value);
 	}
 </script>
