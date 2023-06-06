@@ -23,25 +23,8 @@ app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 app.use(cors())
 
-// app.get("/", (req, res) => {
-// 	res.redirect("/1");
-// })
-
-// app.get('/:roomId', async (req, res) => {
-// 	const roomId = req.params.roomId;
-// 	const chatRoom = roomId > 0 ? await ChatRoom.findOne({ roomId: Number(roomId) }) : null;
-// 	if (chatRoom) {
-// 		try {
-// 			res.render(__dirname + "/views/chatRoom", {chat: chatRoom})
-// 		} catch(err) {
-// 			console.log(err);
-// 			res.render(__dirname + "/views/chatRoom", {chat: chatRoom, error: err})
-// 		}
-// 	}
-// 	else {
-// 		res.render(__dirname + "/views/404");
-// 	}
-// })
+const subscribedUsers = new Map();
+const typingUsers = new Map();
 
 app.post('/save', async (req, res) => {
 	const roomId = Number(req.body.roomId);
@@ -76,7 +59,6 @@ app.get('/chat-rooms', async (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('A user connected');
 
 	socket.on("message", async (msg) => {
 		console.log(msg);
@@ -84,19 +66,53 @@ io.on('connection', (socket) => {
 			const chatRoom = await ChatRoom.findOne({roomId: msg.roomId});
 			const chatMessage = { content: msg.content, messenger: { username: msg.username }}
 			chatRoom.messages.push(chatMessage);
-			await chatRoom.save();
+			// await chatRoom.save();
 			io.to(msg.roomName).emit("message", chatMessage);
 		}
 	});
 
-	socket.on('join', (chatRoom) => {
-		socket.join(chatRoom);
-		console.log('Client joined chat room: ', chatRoom);
+	socket.on('join', ({roomName, user}) => {
+		socket.join(roomName);
+		subscribedUsers.set(socket.id, user);
+		// console.log("Subscribed user: ", subscribedUsers.get(socket.id));
+		// const clientsInChannel = io.sockets.adapter.rooms.get(roomName);
+		// console.log("Currenly subscribed clients: ", clientsInChannel);
+		// console.log("Currenly subscribed clients: ", clientsInChannel.size);
 	});
 
+	socket.on('startTyping', ({roomName}) => {
+		if (typingUsers.get(roomName)){
+			typingUsers.get(roomName).push(socket.id)
+		} else {
+			typingUsers.set(roomName, [socket.id])
+		}
+		emitTypingUsers(roomName);
+	})
+
+	socket.on('stopTyping', ({roomName}) => {
+		const users = typingUsers.get(roomName)
+		if (users?.length > 0){
+			const remainingUsers = users.filter(s => s && s !== socket.id)
+			typingUsers.set(roomName, remainingUsers)
+		}
+		emitTypingUsers(roomName);
+	})
+
   socket.on('disconnect', () => {
-    console.log('A user disconnected');
+    console.log('Disconnected user: ', subscribedUsers.get(socket.id));
+		subscribedUsers.delete(socket.id)
   });
+
+	function emitTypingUsers(roomName) {
+		const typingSockets = typingUsers.get(roomName);
+		if (typingSockets?.length >= 0){
+			const users = [];
+			typingSockets.forEach(s => {
+				if (subscribedUsers.get(s)) users.push(subscribedUsers.get(s))
+			})
+			io.to(roomName).emit('typing', {typingUsers: users});
+		}
+	}
 });
 
 server.listen(port, () => {
