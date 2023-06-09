@@ -1,7 +1,13 @@
+require('dotenv').config()
+const User = require('./models/user');
+const Message = require('./models/message');
+const ChatRoom = require('./models/chatRoom');
+
 const express = require('express')
+const bcrypt = require("bcryptjs")
+const jwt = require('jsonwebtoken')
 const cors = require('cors')
 const app = express()
-const { User, Message, ChatRoom } = require('./models/chat');
 const http = require('http');
 const server = http.createServer(app);
 const socketio = require("socket.io");
@@ -13,41 +19,59 @@ const io = socketio(server, {
 });
 
 const port = 3000
+const jwtKey = process.env.JWT_SECRET
 
-const bodyParser = require("body-parser");
-const ejs = require("ejs");
-
-app.set('view engine', 'ejs');
-
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(express.static("public"));
+app.use(express.json());
 app.use(cors())
 
 const subscribedUsers = new Map();
 const typingUsers = new Map();
 
-app.post('/save', async (req, res) => {
-	const roomId = Number(req.body.roomId);
-	const message = req.body.message;
-	const username = req.body.username;
-
-	const chatRoom = roomId > 0 ? await ChatRoom.findOne({ roomId: roomId }) : null;
-	if (chatRoom) {
+app.post('/signup', async (req, res) => {
+	const { email, password, confirm_password, name } = req.body;
+	let user = await User.findOne({ email: email });
+	if (user){
+		res.status(422).json({ message: "Account already registered, please login"});
+	} else {
 		try {
-			const chatMessage = { content: message, messenger: { username: username }}
-			chatRoom.messages.push(chatMessage);
-			await chatRoom.save()
-			io.emit('new message', { chatMessage: chatMessage, chatRoom: chatRoom});
-			res.redirect(`/${roomId}`)
-		} catch(err) {
-			console.log(err);
-			res.render(__dirname + "/views/chatRoom", {chat: chatRoom, error: err})
+			bcrypt.genSalt(3, function(err, salt) {
+				bcrypt.hash(password, salt, async function(err, hash) {
+					user = new User({ email: email, name: name, password: hash })
+					await user.save()
+					res.status(200).json({ message: "Singup successful", user: user })
+				});
+			});
+		} catch (err) {
+			res.status(400).json({
+				message: "Opps! Something went wrong",
+				error: err.message
+			});
 		}
 	}
-	else {
-		res.render(__dirname + "/views/404");
+})
+
+app.post('/login', async (req, res) => {
+	const { email, password } = req.body;
+	const user = await User.findOne({ email: email })
+	if (user){
+		bcrypt.compare(password, user.password).then(function (result) {
+			if (result){
+				const maxAge = 48*60*60
+				const token = getToken({ email: email, id: user.id }, maxAge)
+				res.cookie('token', token, {
+					httpOnly: true,
+					maxAge: maxAge * 1000,
+					// secure: true
+				})
+				res.status(200).json({ message: "Login successful", user })
+			} else {
+				res.status(400).json({ message: "Enter correct password" })
+			}
+		})
+	} else {
+		res.status(404).json({message: "User not found, please signup"})
 	}
-});
+})
 
 app.get('/chat-rooms', async (req, res) => {
 	const chatRooms = await ChatRoom.find({});
@@ -61,12 +85,11 @@ app.get('/chat-rooms', async (req, res) => {
 io.on('connection', (socket) => {
 
 	socket.on("message", async (msg) => {
-		console.log(msg);
 		if (msg && msg.username && msg.content && msg.roomId && msg.roomName){
 			const chatRoom = await ChatRoom.findOne({roomId: msg.roomId});
 			const chatMessage = { content: msg.content, messenger: { username: msg.username }}
 			chatRoom.messages.push(chatMessage);
-			// await chatRoom.save();
+			await chatRoom.save();
 			io.to(msg.roomName).emit("message", chatMessage);
 		}
 	});
@@ -74,10 +97,7 @@ io.on('connection', (socket) => {
 	socket.on('join', ({roomName, user}) => {
 		socket.join(roomName);
 		subscribedUsers.set(socket.id, user);
-		// console.log("Subscribed user: ", subscribedUsers.get(socket.id));
 		// const clientsInChannel = io.sockets.adapter.rooms.get(roomName);
-		// console.log("Currenly subscribed clients: ", clientsInChannel);
-		// console.log("Currenly subscribed clients: ", clientsInChannel.size);
 	});
 
 	socket.on('startTyping', ({roomName}) => {
@@ -118,3 +138,14 @@ io.on('connection', (socket) => {
 server.listen(port, () => {
   console.log(`App listening on port http://localhost:${port}`)
 })
+
+function getToken(data, maxAge=24*60*60){
+	const token = jwt.sign(
+		data,
+		jwtKey,
+		{
+			expiresIn: maxAge,
+		}
+	);
+	return token
+}

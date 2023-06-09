@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-
-mongoose.connect('mongodb+srv://mitpatel5344:5344@indiancluster.qcyvhu0.mongodb.net/blogDB?retryWrites=true&w=majority', { useNewUrlParser: true });
+const connectToDB = require('./database');
+connectToDB();
 
 const commentSchema = mongoose.Schema({
 	name: {
