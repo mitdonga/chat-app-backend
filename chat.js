@@ -11,6 +11,7 @@ const app = express()
 const http = require('http');
 const server = http.createServer(app);
 const socketio = require("socket.io");
+const cookieParser = require('cookie-parser')
 const io = socketio(server, {
   cors: {
     origin: '*',
@@ -22,10 +23,36 @@ const port = 3000
 const jwtKey = process.env.JWT_SECRET
 
 app.use(express.json());
-app.use(cors())
+const corsConfig = {
+	origin: true,
+	credentials: true
+}
+app.use(cors(corsConfig))
+app.use(cookieParser())
+app.options('*', cors(corsConfig))
 
 const subscribedUsers = new Map();
 const typingUsers = new Map();
+
+const authUserMW = (req, res, next) => {
+	const token = req.cookies.token
+	if (!token) {
+		res.status(401).json({ message: "You're not authorized to access, please login again." })
+	} else {
+		jwt.verify(token, jwtKey, async (err, decodedToken) => {
+			if (err) {
+				res.status(401).json({ message: "Session expired, please login" })
+			} else if (decodedToken && decodedToken.id) {
+				const user = await User.findById(decodedToken.id)
+				req.user = user;
+				next();
+			} else {
+				res.clearCookie('token')
+				res.status(401).json({ message: "Session expired, please login" })
+			}
+		})
+	}
+}
 
 app.post('/signup', async (req, res) => {
 	const { email, password, confirm_password, name } = req.body;
@@ -52,17 +79,21 @@ app.post('/signup', async (req, res) => {
 
 app.post('/login', async (req, res) => {
 	const { email, password } = req.body;
-	const user = await User.findOne({ email: email })
+	const user = await User.findOne({ email: email }).lean()
 	if (user){
 		bcrypt.compare(password, user.password).then(function (result) {
 			if (result){
-				const maxAge = 48*60*60
-				const token = getToken({ email: email, id: user.id }, maxAge)
+				const maxAge = 24*60*60
+				const token = getToken({ email: email, id: user._id }, maxAge)
 				res.cookie('token', token, {
 					httpOnly: true,
 					maxAge: maxAge * 1000,
-					// secure: true
+					secure: true
 				})
+				delete user.password
+				delete user.__v
+				delete user._id
+				console.log(user);
 				res.status(200).json({ message: "Login successful", user })
 			} else {
 				res.status(400).json({ message: "Enter correct password" })
@@ -73,12 +104,12 @@ app.post('/login', async (req, res) => {
 	}
 })
 
-app.get('/chat-rooms', async (req, res) => {
+app.get('/chat-rooms', authUserMW, async (req, res) => {
 	const chatRooms = await ChatRoom.find({});
 	if (chatRooms.length > 0) {
-		res.json(chatRooms)
+		res.status(200).json(chatRooms)
 	} else {
-		res.json({ message: 'No chat room found'});
+		res.status(204).json({ message: 'No chat room found'});
 	}
 });
 
