@@ -92,8 +92,6 @@ app.post('/login', async (req, res) => {
 				})
 				delete user.password
 				delete user.__v
-				delete user._id
-				console.log(user);
 				res.status(200).json({ message: "Login successful", user })
 			} else {
 				res.status(400).json({ message: "Enter correct password" })
@@ -107,61 +105,78 @@ app.post('/login', async (req, res) => {
 app.get('/chat-rooms', authUserMW, async (req, res) => {
 	const chatRooms = await ChatRoom.find({});
 	if (chatRooms.length > 0) {
-		res.status(200).json(chatRooms)
+		res.status(200).json({ message: `Found ${chatRooms.length} chat rooms`, chatRooms: chatRooms })
 	} else {
 		res.status(204).json({ message: 'No chat room found'});
 	}
 });
 
+app.get('/chat-rooms/:name', authUserMW, async (req, res) => {
+	try {
+		const roomName = req.params.name
+		const chatRoom = await ChatRoom.findOne({name: roomName});
+		const message = new Message({content: `Welcome to ${roomName} Chat..`, sender: req.user._id, chatroom: chatRoom._id});
+		if (chatRoom) {
+			const messages = await Message.find({chatroom: chatRoom._id}).populate({path: 'sender', select: 'name email'});
+			if (messages.length === 0) await message.save()
+			res.status(200).json({ chatRoom: chatRoom, messages: messages})
+		} else {
+			res.status(204).json({ message: 'No chat room found'});
+		}
+	} catch (err) {
+		res.status(400).json({ message: "Opps! something went wrong" })
+	}
+});
+
 io.on('connection', (socket) => {
+	console.log("Connected :", socket.id);
 
 	socket.on("message", async (msg) => {
-		if (msg && msg.username && msg.content && msg.roomId && msg.roomName){
-			const chatRoom = await ChatRoom.findOne({roomId: msg.roomId});
-			const chatMessage = { content: msg.content, messenger: { username: msg.username }}
-			chatRoom.messages.push(chatMessage);
-			await chatRoom.save();
-			io.to(msg.roomName).emit("message", chatMessage);
+		if (msg && msg.content && msg.chatroom && msg.sender){
+			const message = new Message(msg)
+			await message.save();
+			await message.populate({path: 'sender', select: 'name email'});
+			io.to(msg.chatroom).emit("message", message);
 		}
 	});
 
-	socket.on('join', ({roomName, user}) => {
-		socket.join(roomName);
+	socket.on('join', async ({roomId, userId}) => {
+		socket.join(roomId);
+		const user = await User.findById(userId);
 		subscribedUsers.set(socket.id, user);
-		// const clientsInChannel = io.sockets.adapter.rooms.get(roomName);
 	});
 
-	socket.on('startTyping', ({roomName}) => {
-		if (typingUsers.get(roomName)){
-			typingUsers.get(roomName).push(socket.id)
+	socket.on('startTyping', ({roomId}) => {
+		if (typingUsers.get(roomId)){
+			typingUsers.get(roomId).push(socket.id)
 		} else {
-			typingUsers.set(roomName, [socket.id])
+			typingUsers.set(roomId, [socket.id])
 		}
-		emitTypingUsers(roomName);
+		emitTypingUsers(roomId);
 	})
 
-	socket.on('stopTyping', ({roomName}) => {
-		const users = typingUsers.get(roomName)
+	socket.on('stopTyping', ({roomId}) => {
+		const users = typingUsers.get(roomId)
 		if (users?.length > 0){
 			const remainingUsers = users.filter(s => s && s !== socket.id)
-			typingUsers.set(roomName, remainingUsers)
+			typingUsers.set(roomId, remainingUsers)
 		}
-		emitTypingUsers(roomName);
+		emitTypingUsers(roomId);
 	})
 
   socket.on('disconnect', () => {
-    console.log('Disconnected user: ', subscribedUsers.get(socket.id));
+		console.log("Disconnected ", socket.id);
 		subscribedUsers.delete(socket.id)
   });
 
-	function emitTypingUsers(roomName) {
-		const typingSockets = typingUsers.get(roomName);
+	function emitTypingUsers(roomId) {
+		const typingSockets = typingUsers.get(roomId);
 		if (typingSockets?.length >= 0){
 			const users = [];
 			typingSockets.forEach(s => {
-				if (subscribedUsers.get(s)) users.push(subscribedUsers.get(s))
+				if (subscribedUsers.get(s)) users.push(subscribedUsers.get(s).name)
 			})
-			io.to(roomName).emit('typing', {typingUsers: users});
+			io.to(roomId).emit('typing', {typingUsers: users});
 		}
 	}
 });
