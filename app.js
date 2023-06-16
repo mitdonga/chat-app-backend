@@ -14,7 +14,7 @@ const socketio = require("socket.io");
 const cookieParser = require('cookie-parser')
 const io = socketio(server, {
   cors: {
-    origin: "https://chat-app-frontend-lac.vercel.app",
+    origin: process.env.FRONTEND_URL,
     methods: ['GET', 'POST']
   }
 });
@@ -24,7 +24,7 @@ const jwtKey = process.env.JWT_SECRET
 
 app.use(express.json());
 const corsConfig = {
-	origin: "https://chat-app-frontend-lac.vercel.app",
+	origin: process.env.FRONTEND_URL,
 	credentials: true
 }
 app.use(cors(corsConfig))
@@ -90,6 +90,7 @@ app.post('/login', async (req, res) => {
 				const maxAge = 24*60*60
 				const token = getToken({ email: email, id: user._id }, maxAge)
 				res.cookie('token', token, {
+					domain: process.env.FRONTEND_DOMAIN,
 					httpOnly: true,
 					maxAge: maxAge * 1000,
 					secure: true
