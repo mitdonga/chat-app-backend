@@ -14,7 +14,7 @@ const socketio = require("socket.io");
 const cookieParser = require('cookie-parser')
 const io = socketio(server, {
   cors: {
-    origin: '*',
+    origin: "https://chat-app-frontend-lac.vercel.app",
     methods: ['GET', 'POST']
   }
 });
@@ -24,7 +24,7 @@ const jwtKey = process.env.JWT_SECRET
 
 app.use(express.json());
 const corsConfig = {
-	origin: true,
+	origin: "https://chat-app-frontend-lac.vercel.app",
 	credentials: true
 }
 app.use(cors(corsConfig))
