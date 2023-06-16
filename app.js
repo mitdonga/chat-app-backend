@@ -1,121 +1,201 @@
-// //jshint esversion:6
+require('dotenv').config()
+const User = require('./models/user');
+const Message = require('./models/message');
+const ChatRoom = require('./models/chatRoom');
 
-// const express = require("express");
-// const bodyParser = require("body-parser");
-// const ejs = require("ejs");
-// var _ = require('lodash');
-// const { Post, Comment } = require('./models/blog');
+const express = require('express')
+const bcrypt = require("bcryptjs")
+const jwt = require('jsonwebtoken')
+const cors = require('cors')
+const app = express()
+const http = require('http');
+const server = http.createServer(app);
+const socketio = require("socket.io");
+const cookieParser = require('cookie-parser')
+const io = socketio(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
-// const homeStartingContent = "Lacus vel facilisis volutpat est velit egestas dui id ornare. Semper auctor neque vitae tempus quam. Sit amet cursus sit amet dictum sit amet justo. Viverra tellus in hac habitasse. Imperdiet proin fermentum leo vel orci porta. Donec ultrices tincidunt arcu non sodales neque sodales ut. Mattis molestie a iaculis at erat pellentesque adipiscing. Magnis dis parturient montes nascetur ridiculus mus mauris vitae ultricies. Adipiscing elit ut aliquam purus sit amet luctus venenatis lectus. Ultrices vitae auctor eu augue ut lectus arcu bibendum at. Odio euismod lacinia at quis risus sed vulputate odio ut. Cursus mattis molestie a iaculis at erat pellentesque adipiscing.";
+const port = process.env.PORT || 3000
+const jwtKey = process.env.JWT_SECRET
 
-// const aboutContent = "Hac habitasse platea dictumst vestibulum rhoncus est pellentesque. Dictumst vestibulum rhoncus est pellentesque elit ullamcorper. Non diam phasellus vestibulum lorem sed. Platea dictumst quisque sagittis purus sit. Egestas sed sed risus pretium quam vulputate dignissim suspendisse. Mauris in aliquam sem fringilla. Semper risus in hendrerit gravida rutrum quisque non tellus orci. Amet massa vitae tortor condimentum lacinia quis vel eros. Enim ut tellus elementum sagittis vitae. Mauris ultrices eros in cursus turpis massa tincidunt dui.";
+app.use(express.json());
+const corsConfig = {
+	origin: true,
+	credentials: true
+}
+app.use(cors(corsConfig))
+app.use(cookieParser())
+app.options('*', cors(corsConfig))
 
-// const contactContent = "Scelerisque eleifend donec pretium vulputate sapien. Rhoncus urna neque viverra justo nec ultrices. Arcu dui vivamus arcu felis bibendum. Consectetur adipiscing elit duis tristique. Risus viverra adipiscing at in tellus integer feugiat. Sapien nec sagittis aliquam malesuada bibendum arcu vitae. Consequat interdum varius sit amet mattis. Iaculis nunc sed augue lacus. Interdum posuere lorem ipsum dolor sit amet consectetur adipiscing elit. Pulvinar elementum integer enim neque. Ultrices gravida dictum fusce ut placerat orci nulla. Mauris in aliquam sem fringilla ut morbi tincidunt. Tortor posuere ac ut consequat semper viverra nam libero.";
+const subscribedUsers = new Map();
+const typingUsers = new Map();
 
-// const app = express();
+const authUserMW = (req, res, next) => {
+	const token = req.cookies.token
+	if (!token) {
+		res.status(401).json({ message: "You're not authorized to access, please login again." })
+	} else {
+		jwt.verify(token, jwtKey, async (err, decodedToken) => {
+			if (err) {
+				res.status(401).json({ message: "Session expired, please login" })
+			} else if (decodedToken && decodedToken.id) {
+				const user = await User.findById(decodedToken.id)
+				req.user = user;
+				next();
+			} else {
+				res.clearCookie('token')
+				res.status(401).json({ message: "Session expired, please login" })
+			}
+		})
+	}
+}
 
-// const posts = [];
+app.get('/', (req, res) => {
+	res.send({ message: "Welcome to Mit's Chat App.." })
+})
 
-// app.set('view engine', 'ejs');
+app.post('/signup', async (req, res) => {
+	const { email, password, confirm_password, name } = req.body;
+	let user = await User.findOne({ email: email });
+	if (user){
+		res.status(422).json({ message: "Account already registered, please login"});
+	} else {
+		try {
+			bcrypt.genSalt(3, function(err, salt) {
+				bcrypt.hash(password, salt, async function(err, hash) {
+					user = new User({ email: email, name: name, password: hash })
+					await user.save()
+					res.status(200).json({ message: "Singup successful", user: user })
+				});
+			});
+		} catch (err) {
+			res.status(400).json({
+				message: "Opps! Something went wrong",
+				error: err.message
+			});
+		}
+	}
+})
 
-// app.use(bodyParser.urlencoded({extended: true}));
-// app.use(express.static("public"));
+app.post('/login', async (req, res) => {
+	const { email, password } = req.body;
+	const user = await User.findOne({ email: email }).lean()
+	if (user){
+		bcrypt.compare(password, user.password).then(function (result) {
+			if (result){
+				const maxAge = 24*60*60
+				const token = getToken({ email: email, id: user._id }, maxAge)
+				res.cookie('token', token, {
+					httpOnly: true,
+					maxAge: maxAge * 1000,
+					secure: true
+				})
+				delete user.password
+				delete user.__v
+				res.status(200).json({ message: "Login successful", user })
+			} else {
+				res.status(400).json({ message: "Enter correct password" })
+			}
+		})
+	} else {
+		res.status(404).json({message: "User not found, please signup"})
+	}
+})
 
-// app.get('/about', (req, res) => {
-//  res.render(__dirname + "/views/about", {content: aboutContent});
-// });
+app.get('/chat-rooms', authUserMW, async (req, res) => {
+	const chatRooms = await ChatRoom.find({});
+	if (chatRooms.length > 0) {
+		res.status(200).json({ message: `Found ${chatRooms.length} chat rooms`, chatRooms: chatRooms })
+	} else {
+		res.status(204).json({ message: 'No chat room found'});
+	}
+});
 
-// app.get('/contact', (req, res) => {
-// 	res.render(__dirname + "/views/contact", {content: contactContent});
-// });
+app.get('/chat-rooms/:name', authUserMW, async (req, res) => {
+	try {
+		const roomName = req.params.name
+		const chatRoom = await ChatRoom.findOne({name: roomName});
+		const message = new Message({content: `Welcome to ${roomName} Chat..`, sender: req.user._id, chatroom: chatRoom._id});
+		if (chatRoom) {
+			const messages = await Message.find({chatroom: chatRoom._id}).populate({path: 'sender', select: 'name email'});
+			if (messages.length === 0) await message.save()
+			res.status(200).json({ chatRoom: chatRoom, messages: messages})
+		} else {
+			res.status(204).json({ message: 'No chat room found'});
+		}
+	} catch (err) {
+		res.status(400).json({ message: "Opps! something went wrong" })
+	}
+});
 
-// app.get('/compose', (req,res) => {
-// 	res.render(__dirname + "/views/compose");
-// });
+io.on('connection', (socket) => {
+	console.log("Connected :", socket.id);
 
-// // Read all posts
-// app.get('/', async (req, res) => {
-// 	try {
-// 		var posts = await Post.find({});
-// 		res.render(__dirname + "/views/home", {content: homeStartingContent, posts: posts});
-// 	} catch (err) {
-// 		console.log(err);
-// 	}
-// });
+	socket.on("message", async (msg) => {
+		if (msg && msg.content && msg.chatroom && msg.sender){
+			const message = new Message(msg)
+			await message.save();
+			await message.populate({path: 'sender', select: 'name email'});
+			io.to(msg.chatroom).emit("message", message);
+		}
+	});
 
-// // Create a new post
-// app.post('/compose', async (req,res) => {
-// 	var newPost = {
-// 		title: req.body.title,
-// 		body: req.body.body,
-// 		slug: req.body.slug
-// 	}
-// 	try {
-// 		const post = await new Post(newPost);
-// 		await post.save();
-// 		res.redirect("/");
-// 	} catch (err) {
-// 		console.log(err);
-// 		next(err);
-// 	}
-// });
+	socket.on('join', async ({roomId, userId}) => {
+		socket.join(roomId);
+		const user = await User.findById(userId);
+		subscribedUsers.set(socket.id, user);
+	});
 
-// // Update post
-// app.post('/posts/:postSlug', async (req, res) => {
-// 	const slug = req.params.postSlug;
-// 	const newPost = {
-// 		title: req.body.title,
-// 		body: req.body.body,
-// 		slug: req.body.slug
-// 	}
+	socket.on('startTyping', ({roomId}) => {
+		if (typingUsers.get(roomId)){
+			typingUsers.get(roomId).push(socket.id)
+		} else {
+			typingUsers.set(roomId, [socket.id])
+		}
+		emitTypingUsers(roomId);
+	})
 
-// 	try {
-// 		await Post.updateOne({ slug: slug}, newPost)
-// 		console.log(newPost);
-// 		res.redirect("/");
-// 	} catch (err) {
-// 		console.log(err);
-// 		next(err);
-// 	}
-// });
+	socket.on('stopTyping', ({roomId}) => {
+		const users = typingUsers.get(roomId)
+		if (users?.length > 0){
+			const remainingUsers = users.filter(s => s && s !== socket.id)
+			typingUsers.set(roomId, remainingUsers)
+		}
+		emitTypingUsers(roomId);
+	})
 
-// // Read single post
-// app.get('/posts/:postSlug', async (req, res) => {
-// 	let postSlug = req.params.postSlug;
-// 		try {
-// 			let post = await Post.findOne({ slug: postSlug})
-// 			if (!post) res.render(__dirname + '/views/404')
-// 			res.render(__dirname + "/views/post", {post: post});
-// 		} catch (err) {
-// 			console.log(err);
-// 		}
-// });
+  socket.on('disconnect', () => {
+		console.log("Disconnected ", socket.id);
+		subscribedUsers.delete(socket.id)
+  });
 
-// // Post not found 404
-// app.get('/posts/:postSlug/edit', async (req, res) => {
-// 	let postSlug = req.params.postSlug;
-// 		try {
-// 			let post = await Post.findOne({ slug: postSlug})
-// 			if (!post) res.render(__dirname + '/views/404')
-// 			res.render(__dirname + "/views/edit", {post: post});
-// 		} catch (err) {
-// 			console.log(err);
-// 		}
-// 	console.log("Editing post..");
-// });
+	function emitTypingUsers(roomId) {
+		const typingSockets = typingUsers.get(roomId);
+		if (typingSockets?.length >= 0){
+			const users = [];
+			typingSockets.forEach(s => {
+				if (subscribedUsers.get(s)) users.push(subscribedUsers.get(s).name)
+			})
+			io.to(roomId).emit('typing', {typingUsers: users});
+		}
+	}
+});
 
-// // Delete Post
-// app.post('/posts/:postSlug/delete', async (req, res) => {
-// 	let postSlug = req.params.postSlug;
-// 		try {
-// 			await Post.deleteOne({ slug: postSlug });
-// 			res.redirect("/");
-// 		} catch (err) {
-// 			console.log(err);
-// 		}
-// 	console.log("Deleting post..");
-// });
+server.listen(port, () => {
+  console.log(`App listening on port http://localhost:${port}`)
+})
 
-// app.listen(process.env.PORT || 3000, function() {
-//   console.log("Server started on port 3000");
-// });
+function getToken(data, maxAge=24*60*60){
+	const token = jwt.sign(
+		data,
+		jwtKey,
+		{
+			expiresIn: maxAge,
+		}
+	);
+	return token
+}

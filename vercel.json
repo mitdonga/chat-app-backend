@@ -1,6 +1,6 @@
 {
  "version": 2,
- "name": "123-blog",
+ "name": "chat-app-backend",
  "builds": [{ "src": "app.js", "use": "@vercel/node" }],
  "routes": [{ "src": "/(.*)", "dest": "/app.js" }]
 }
