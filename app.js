@@ -91,7 +91,7 @@ app.post('/login', async (req, res) => {
 				const token = getToken({ email: email, id: user._id }, maxAge)
 				res.cookie('token', token, {
 					// domain: process.env.FRONTEND_DOMAIN,
-					sameSite: 'none',
+					sameSite: "none",
 					httpOnly: true,
 					maxAge: maxAge * 1000,
 					secure: true
