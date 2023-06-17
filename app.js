@@ -90,7 +90,7 @@ app.post('/login', async (req, res) => {
 				const maxAge = 24*60*60
 				const token = getToken({ email: email, id: user._id }, maxAge)
 				res.cookie('token', token, {
-					domain: process.env.FRONTEND_DOMAIN,
+					// domain: process.env.FRONTEND_DOMAIN,
 					httpOnly: true,
 					maxAge: maxAge * 1000,
 					secure: true
