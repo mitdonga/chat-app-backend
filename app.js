@@ -55,7 +55,13 @@ const authUserMW = (req, res, next) => {
 }
 
 app.get('/', (req, res) => {
-	res.send({ message: "Welcome to Mit's Chat App.." })
+	const token = req.cookies.token
+	res.send({ message: "Welcome to Mit's Chat App..", token: token, frontEnd: process.env.FRONTEND_URL, domain: process.env.FRONTEND_DOMAIN })
+})
+
+app.get('/secrets', (req, res) => {
+	const token = req.cookies.token
+	res.send({ message: "Welcome to Mit's Chat App..", token: token, frontEnd: process.env.FRONTEND_URL, domain: process.env.FRONTEND_DOMAIN, mongoDB: process.env.MONGODB_ATLAS, jwt: process.env.JWT_SECRET })
 })
 
 app.post('/signup', async (req, res) => {
