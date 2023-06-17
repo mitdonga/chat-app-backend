@@ -1,24 +1,4 @@
-<%- include('./partials/header'); -%>
-
-	<h1>Home</h1>
-	<p>
-		<%= content %>
-	</p>
-	<% if (posts.length> 0){ %>
-		<h2>Blogs</h2>
-		<% } %>
-
-			<div>
-				<% posts.forEach(post=> { %>
-					<h3>
-						<a href="/posts/<%= post.slug%>">
-							<%= post.title %>
-						</a>
-					</h3>
-					<p>
-						<%= (post.body.length> 100) ? post.body.slice(0, 100) + '...' : post.body %>
-					</p>
-					<% }) %>
-			</div>
-
-			<%- include('./partials/footer'); -%>
+	<h1>Welcome to Real Time Chat App by Mit Donga</h1>
+	<h2>
+		Live @ <a href="https://chat-app-frontend-lac.vercel.app">https://chat-app-frontend-lac.vercel.app/  </a>
+	</h2>
